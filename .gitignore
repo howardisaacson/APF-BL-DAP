@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 
 # Zoe
-
+Zoe/LaserDetectionResults/*.png
 
 # C extensions
 *.so
