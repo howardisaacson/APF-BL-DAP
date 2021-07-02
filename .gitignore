@@ -5,6 +5,7 @@ __pycache__/
 
 # Zoe
 Zoe/LaserDetectionResults/*.png
+Zoe/LaserDetectionResults/HIP12444/order20/test4/pass/test4_6323.png
 
 # C extensions
 *.so
