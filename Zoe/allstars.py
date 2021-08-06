@@ -18,8 +18,8 @@ from random import uniform
 import mplcursors
 import pandas as pd
 
-folder_name = 'LaserDetectionResults'
-total_range = np.arange(0, 5868)
+folder_name = 'test'
+total_range = np.arange(0, 10)
 
 plot = False  # plt.show()
 save_figs = True  # save figures into folders
@@ -264,7 +264,7 @@ for which_star in total_range:
         # oversample detected signal to determine precise bounds on the edges of the signal
         # use this to determine the FWHM of the signal in pixels
         oversampled_x = np.linspace(x[0], x[-1], len(x) * 10)
-        spl = splrep(x, y)
+        spl = splrep(x, y, k=2)
         oversampled_y = splev(oversampled_x, spl)
 
         max_y = max(oversampled_y)
