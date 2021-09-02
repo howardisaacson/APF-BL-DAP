@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h1>{% block title %} <center>  Welcome! <center> {% endblock %}</h1>
+    <h2><center> This website  displays APF data. <center> </h2>
+    <h4><center> ------------------------------------------------------------- <center> <h4>
+    <h5> For the APF Specmatch-Emp results:</h5>
+    <a href="http://127.0.0.1:5000/APF_Results">    APF_Results</a>
+    <h5> For the most recent APF logfile:</h5>
+    <a href="http://127.0.0.1:5000/APF_Logfile">    APF_Logfile</a>
+    <h5> For a table of Gaia stellar properties:</h5>
+    <a href="http://127.0.0.1:5000/Gaia_Values">    Gaia_Properties</a>
+<!--    {% for post in posts %}                                          -->
+<!--        <a href="#">                                                     -->
+<!--            <h2>{{ post['title'] }}</h2>                                 -->
+<!--        </a>                                                             -->
+<!--        <span class="badge badge-primary">{{ post['created'] }}</span>   -->
+<!--        <hr>                                                             -->
+<!--    {% endfor %}                                                         -->
+{% endblock %}
