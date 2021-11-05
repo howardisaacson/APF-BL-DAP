@@ -1,0 +1,55 @@
+﻿KEYWORD,DESCRIPTION
+name,Name as listed in the fist spectra fits file header for this star.
+HIP_name,Name in Hipparcos catalog (if found in Simbad)
+filenames,Names of fits spectra files used for this star.
+SNR,Single-to-noise ratio for the combined set of spectra files.
+iodine_flag,True if any of the fits files for this star had iodine (do not trust results if True because matching process will not work well). 
+failure_code,True if SM-Emp failed to run.
+failure_message,Message describing why SM-Emp failed.
+iso_fail_flag,True if Isoclassify failed to run.
+warnings,Warning messages that did not result in failure. 
+Teff_bounds_flag,"1 if Teff is outside library bounds according to Gaia, 0 if not, 3 if Teff value not found in Gaia. "
+R_bounds_flag,"1 if radius is outside library bounds according to Gaia, 0 if not, 3 if radius value not found in Gaia. "
+Teff,Effective temperature as computed by SM-Emp (before detrending and isochrone analysis) [K].
+u_Teff,Uncertainty in effective temperature as computed by SM-Emp (before detrending and isochrone analysis) [K].
+Teff_detrended,Detrended effective temperature as computed by SM-Emp ( before isochrone analysis) [K].
+u_Teff_detrended,Uncertainty in detrended effective temperature as computed by SM-Emp (before detrending and isochrone analysis) [K].
+iso_Teff,Final effective temperature value after detrending and isochrone analysis [K].
+iso_up_Teff,Upper uncertainty in effective temperature after detrending and isochrone analysis [K].
+iso_um_Teff,Lower uncertainty in effective temperature after detrending and isochrone analysis [K].
+radius,Radius as computed by SM-Emp (before detrending and isochrone analysis) [Ro].
+u_radius,Uncertainty in radius as computed by SM-Emp (before detrending and isochrone analysis) [Ro].
+radius_detrended,Detrended radius as computed by SM-Emp ( before isochrone analysis) [Ro].
+u_radius_detrended,Uncertainty in detrended radius as computed by SM-Emp (before detrending and isochrone analysis) [Ro].
+iso_radius,Final radius value after detrending and isochrone analysis [Ro].
+iso_up_radius,Upper uncertainty in radius after detrending and isochrone analysis [Ro].
+iso_um_radius,Lower uncertainty in radius after detrending and isochrone analysis [Ro].
+feh,Metallicity [Fe/H] as computed by SM-Emp (before detrending and isochrone analysis) [dex].
+u_feh,Uncertainty in metallicity [Fe/H] as computed by SM-Emp (before detrending and isochrone analysis) [dex].
+feh_detrended,Detrended metallicity as computed by SM-Emp ( before isochrone analysis) [dex].
+u_feh_detrended,Uncertainty in detrended metallicity as computed by SM-Emp (before detrending and isochrone analysis) [dex].
+iso_feh,Final metallicity value after detrending and isochrone analysis [dex].
+iso_up_feh,Upper uncertainty in metallicity after detrending and isochrone analysis [dex].
+iso_um_feh,Lower uncertainty in metallicity after detrending and isochrone analysis [dex].
+logg,Log surface gravity as computed by SM-Emp (before detrending and isochrone analysis).
+u_logg,Uncertainty in log surface gravity as computed by SM-Emp (before detrending and isochrone analysis).
+logg_detrended,Detrended log surface gravity as computed by SM-Emp ( before isochrone analysis) [].
+u_logg_detrended,Uncertainty in detrended log surface gravity as computed by SM-Emp (before detrending and isochrone analysis) [].
+iso_logg,Final log surface gravity value after detrending and isochrone analysis [].
+iso_up_logg,Upper uncertainty in log surface gravity after detrending and isochrone analysis [].
+iso_um_logg,Lower uncertainty in log surface gravity after detrending and isochrone analysis [].
+mass,Mass as computed by SM-Emp (before detrending and isochrone analysis) [Mo].
+u_mass,Uncertainty in mass as computed by SM-Emp (before detrending and isochrone analysis) [Mo].
+mass_detrended,Detrended mass as computed by SM-Emp ( before isochrone analysis) [Mo].
+u_mass_detrended,Uncertainty in detrended mass as computed by SM-Emp (before detrending and isochrone analysis) [Mo].
+iso_mass,Final mass value after detrending and isochrone analysis [Mo].
+iso_up_mass,Upper uncertainty in mass after detrending and isochrone analysis [Mo].
+iso_um_mass,Lower uncertainty in mass after detrending and isochrone analysis [Mo].
+age,Age as computed by SM-Emp (before detrending and isochrone analysis) [Ga].
+u_age,Uncertainty in age as computed by SM-Emp (before detrending and isochrone analysis) [Ga].
+age_detrended,Detrended age as computed by SM-Emp ( before isochrone analysis) [Ga].
+u_age_detrended,Uncertainty in detrended age as computed by SM-Emp (before detrending and isochrone analysis) [Ga].
+iso_age,Final age value after detrending and isochrone analysis [Ga].
+iso_up_age,Upper uncertainty in age after detrending and isochrone analysis [Ga].
+iso_um_age,Lower uncertainty in age after detrending and isochrone analysis [Ga].
+best_mean_chi_squared,Best mean chi square from matching process.
