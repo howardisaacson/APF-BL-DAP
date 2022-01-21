@@ -3,15 +3,20 @@ We use and produce several different types of stellar spectra during the analysi
 GENERAL TERMS:
 
 1) Echellogram (raw spectrum): 
-The unprocessed data as recorded by the spectrometer. The echellogram is comprised of 79 orders. Each order contains a 2-dimensional chunk of the spectrum, with the horizontal axis corresponding to the wavelength dimension, and the vertical axis corresponding to a spatial dimension. The orders overlap with adjacent orders in wavelength. Each pixel records an intensity value that is directly related to the number of photons which hit the detector in the corresponding wavelength bin  (pixel) and spatial position along the spectrometer.
+The unprocessed data as recorded by the spectrometer. The echellogram is comprised of 79 orders. Each order contains a 2-dimensional chunk of the spectrum, 
+with the horizontal axis corresponding to the wavelength dimension, and the vertical axis corresponding to a spatial dimension. The orders overlap with adjacent orders 
+in wavelength. Each pixel records an intensity value that is directly related to the number of photons which hit the detector in the corresponding wavelength bin
+(pixel) and spatial position along the spectrometer.
 Raw spectra files on the BL database start with the prefix 'ucb'.
 
 2) Reduced spectrum: 
-The reduced spectrum is derived from the raw echellogram. It also consists of 79 orders, but the spatial dimension had been collapsed such that each wavelength bin corresponds to one intensity value. This value can be interpreted for the APF as the number of photons which hit the spectrometer in the corresponding wavelenght bin. 
+The reduced spectrum is derived from the raw echellogram. It also consists of 79 orders, but the spatial dimension had been collapsed such that each wavelength bin 
+corresponds to one intensity value. This value can be interpreted for the APF as the number of photons which hit the spectrometer in the corresponding wavelenght bin. 
 Raw spectra files on the BL database start with the prefix 'r'.
 
 3) Deblazed spectrum: 
-The reduced spectrum is subject to an aritifact of the telescope optics which makes pixels near the center of each order artificially birghter than those near the edges. Deblazing removes this effect by dividing out the fit or modeled blaze function of the telescope. 
+The reduced spectrum is subject to an aritifact of the telescope optics which makes pixels near the center of each order artificially birghter than those near the edges. 
+Deblazing removes this effect by dividing out the fit or modeled blaze function of the telescope. 
 
 3) Normalized spectrum:
 After deblazing the spectrum can be normalized in each order such that the baseline flux level is 1. 
@@ -19,11 +24,15 @@ After deblazing the spectrum can be normalized in each order such that the basel
 SPECMATCH-EMP SPECIFIC TERMS:
 
 4) Resampled spectrum:
-The deblazed and normalized spectrum still consists of 79 orders. We resample to combine the orders such that only one value corresponds to each wavelength bin. For SpecMatch-Emp, we resample onto the model's reference wavelength scale. This scale is constant in delta log(lambda), which means a given relative velocity between the observed star and the observer results in the same shift in pixels at all pixels across the spectrum.  
+The deblazed and normalized spectrum still consists of 79 orders. We resample to combine the orders such that only one value corresponds to each wavelength bin. 
+For SpecMatch-Emp, we resample onto the model's reference wavelength scale. This scale is constant in delta log(lambda), which means a given relative velocity 
+between the observed star and the observer results in the same shift in pixels at all pixels across the spectrum.  
 
 5) Shifted spectrum:
-The resampled spectrum is shifted into the target star's rest frame. This is accomplished by the SpecMatch-Emp shift() method, which cross-correlates the target spectrum in the observed frame with a reference spectrum of the same stellar type. 
+The resampled spectrum is shifted into the target star's rest frame. This is accomplished by the SpecMatch-Emp shift() method, which cross-correlates the target spectrum 
+in the observed frame with a reference spectrum of the same stellar type. 
 
 6) Residual spectrum:
-The residual is produced by subtracting from the target spectrum the linear combination of best-matching library spectra determined by SpecMatch-Emp. The residual spectrum has a baseline flux of 0. 
+The residual is produced by subtracting from the target spectrum the linear combination of best-matching library spectra determined by SpecMatch-Emp. The residual spectrum 
+has a baseline flux of 0. 
 
