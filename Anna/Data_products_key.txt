@@ -28,7 +28,7 @@ The deblazed and normalized spectrum still consists of 79 orders. We resample to
 For SpecMatch-Emp, we resample onto the model's reference wavelength scale. This scale is constant in delta log(lambda), which means a given relative velocity 
 between the observed star and the observer results in the same shift in pixels at all pixels across the spectrum.  
 
-5) Shifted spectrum:
+5) Shifted spectrum "SpecMatch processed spectrum: reduced, deblazed, normalized, resampled and shifted":
 The resampled spectrum is shifted into the target star's rest frame. This is accomplished by the SpecMatch-Emp shift() method, which cross-correlates the target spectrum 
 in the observed frame with a reference spectrum of the same stellar type. 
 
