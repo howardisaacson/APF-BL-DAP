@@ -1,10 +1,8 @@
-# coding: utf-8
 
 
-# run_smemp_apf.py --> python version of the mipynb notebook. 
+# run_smemp_apf.py --> python version of the ipynb notebook. 
 # Script to run Specmatch-Emp model on APF spectra and output results including derived stellar properties 
 # and residual between target and best matching spectra.
-# Last modified ?? by Anna Zuckerman
 #
 # NOTE: This script is modified from smemp_multifile.ipynb (itself modified from C.N's smemp.py). Modifications from smemp.py include added ability to process mulitple stellar
 #      targets from a directory, new deblazing function, option to simplistically remove cosmic rays, and new output
@@ -30,10 +28,19 @@ import os
 import sys
 parser = argparse.ArgumentParser(description="Run Specmatch-Emp model and isochrone analysis on APF stellar spectra.")
 parser.add_argument("--get_only_NDR", help="Only compute the normalized, deblazed, registered spectra (NOT YET IMPLEMENTED -- use  get_all_NDR_corrected.ipynb)", action = 'store_true') # default is false
+parser.add_argument("--save_unshifted", help="Save the deblazed, normalized, resampled and NOT shifted target to a fits file.", action = 'store_true') # default is false
+parser.add_argument("--save_shifted", help="Save the deblazed, normalized, resampled and shifted target to a fits file.", action = 'store_true') # default is false
+parser.add_argument("--save_shifts", help="Save the pixel shift values for each of the nine sections", action = 'store_true') # default is false
+parser.add_argument("-unshifted_out","--unshifted_out_path", type=str, help= "Directory to save deblazed, normalized, resampled and NOT shifted target to (ie. 'NDRU_calib').") 
+parser.add_argument("-shifted_out","--shifted_out_path", type=str, help= "Directory to save deblazed, normalized, resampled and shifted target to (ie. 'NDRS_calib').") 
 parser.add_argument("--omit_properties", help= "Do NOT output the stellar property results from SM-Emp", action = 'store_true') 
 parser.add_argument("--omit_resids", help= "Do NOT output the residuals", action = 'store_true') 
 parser.add_argument("--dont_run_iso", help= "Do NOT run isochrone analysis to determine additional stellar properties", action = 'store_true') 
 parser.add_argument("--save_SM_object", help= "Save the Specmatch objects themselves", action = 'store_true') 
+parser.add_argument("--save_peak_scale_factors", help= "Save the factors by which the peaks of each order are scaled.", action = 'store_true')
+parser.add_argument("--save_scale_factors", help= "Save the factors by which each pixel is scaled.", action = 'store_true')
+parser.add_argument("--save_baselines", help= "Save baseline flux values (num photons).", action = 'store_true')
+parser.add_argument("--save_photon_counts", help= "Save photon counts (resampled, non-normalized, non-deblazed spectrum).", action = 'store_true')
 parser.add_argument("--display_plots", help= "Make additional plots (beyond standard outputs)", action = 'store_true') 
 parser.add_argument("-make_new", "--make_new", help="Make new output directories (without this flag will add to existing directories, but careful if same output residuals or plots have already been run in existing output directories).", action = 'store_true')
 parser.add_argument("-in", "--path_to_dir", type=str, help="Path to input directory containing spectra to run on (ie. '/mnt_home/azuckerman/BL_APF_DAP/APF_spectra/apf_spectra_highest_SNR' for calibration run.")
@@ -44,26 +51,43 @@ parser.add_argument("-plots_out", "--plots_out_path", type=str, help="Directory 
 parser.add_argument("-start", "--start", type=int, help="Index of file to start on.")
 parser.add_argument("-stop", "--stop", type=int, help="Index of file to stop on.")
 parser.add_argument("-results_type","--results_subdirectory", type=str, help= "What type of run is this. Must match a subdirectory name (all_apf, calibration, tests, or old).") 
+#parser.add_argument("-lags_dir","--lags_out_dir", type=str, help= "Directory for lags output.") 
+#parser.add_argument("-lags_file","--lags_file", type=str, help= "Filename for lags output.") 
 args = parser.parse_args()
 # options
 get_only_NDR = args.get_only_NDR # only compute the normalized, deblazed, registered spectra (NOT YET IMPLEMENTED -- use get_all_NDR_corrected.ipynb)
 get_properties = not args.omit_properties # run SM-Emp and output the stellar property results 
 get_resids = not args.omit_resids # run SM-Emp and output the residuals
 run_iso = not args.dont_run_iso # run SM-Emp and run isochrone analysis to determine additional stellar properties
+save_shifted = args.save_shifted # save the shifted target
+save_unshifted = args.save_unshifted # save the unshifted target
+save_shifts = args.save_shifts # save the shift values
 save_SM_object = args.save_SM_object # to save the Specmatch objects themselves
-display_plots = args.display_plots # to make plots
+display_plots = args.display_plots # to make plots 
+save_peak_scale_factors = args.save_peak_scale_factors # to save scale factors at peak of blaze functions
+save_scale_factors = args.save_scale_factors # to save scale factors
+save_baselines = args.save_baselines # to save baselines
+save_photon_counts = args.save_photon_counts # to save absolute photon counts
 residuals_out_path = 'APF_spectra/' + args.residuals_out_path + '/' #'/NDRR_calib/' # directory to save residuals to 
 properties_out_path = 'SM_stellar_properties/' # directory to save steller property results to
+shifted_out_path = 'APF_spectra/' + args.shifted_out_path + '/' #'/NDRS_calib/' # directory to save shifted target to 
+unshifted_out_path = 'APF_spectra/' + args.unshifted_out_path + '/' #'/NDRU_calib/' # directory to save unshifted target to 
+#lags_out_path = 'SM_shift_values/' # directory to save shift value results to
 results_subdir = args.results_subdirectory + '/' # subdirectoy to save property results
 results_filename = args.results_filename #'specmatch_results_calib.csv' # filename for stellar property results within properties_out_path dir and results_subdir
 plots_out_path =  args.plots_out_path + '/' #'SM_output_plots_calib' # directory to save plots to
 properties_plots_path = args.plots_out_path + '/Stellar_properties/' # directory for property plots
 spectra_plots_path = args.plots_out_path + '/Ref_lincomb_spectra/' # directory for spectra plots
+#lags_path = lags_out_path  + args.lags_file # file for lags output
+scale_factor_path = 'SM_scale_factors/' + args.results_subdirectory # directory to save factors by which each pixel is scaled
+baseline_path = 'SM_baseline_fluxes/' + args.results_subdirectory # directory to save baseline fluxes
+photon_counts_path = 'SM_photon_counts/' + args.results_subdirectory # directory to save absolute photon counts
 logfile = args.logfile
 path_to_dir = args.path_to_dir
 start = args.start
 stop = args.stop
 make_new = args.make_new
+
 
 # set up output streaming
 if os.path.exists(logfile):
@@ -111,9 +135,12 @@ PACKAGEDIR = '/mnt_home/azuckerman/BL_APF_DAP/isoclassify/isoclassify'
 # Other local imports
 #from deblaze import afs_deblaze # ADZ comment out
 from rescale import get_rescaled_wave_soln
-from rescale import resample
+#from rescale import resample
+from rescale import resample_order
 from optparse import OptionParser
 from bstar_deblaze import bstar_deblazed2 #ADZ ADD 7/17/20
+#from bstar_deblaze import zoe_percentile_deblazed
+from AFS_deblaze import AFS
 
 # Example command-line run:
 #python run_smemp_apf.py -in '/mnt_home/azuckerman/BL_APF_DAP/APF_spectra/apf_spectra_highest_SNR' -resid_out 'NDRR_testing' -results_out #'specmatch_results_testing.csv' -plots_out 'SM_output_plots_testing' 
@@ -135,7 +162,7 @@ class Non_Stellar_Exception(Exception):
     pass
 
 # define functions to write results (for separate cases of successful and failed run)
-def write_results(fd, my_spectrum, sm, iso_results, sim_name, HIP_name, filenames, Teff_bounds_flag, R_bounds_flag, 
+def write_results(fd, my_spectrum, sm, iso_results, id_name, sim_name, HIP_name, filenames, Teff_bounds_flag, R_bounds_flag, 
                   SNR, iodine_flag, iso_fail_flag, warnings, write_new = False): 
                  
     """
@@ -155,7 +182,7 @@ def write_results(fd, my_spectrum, sm, iso_results, sim_name, HIP_name, filename
                   'feh','u_feh', 'feh_detrended','u_feh_detrended', 'iso_feh', 'iso_up_feh', 'iso_um_feh',
                   'logg', 'u_logg', 'logg_detrended', 'u_logg_detrended', 'iso_logg', 'iso_up_logg', 'iso_um_logg',
                   'mass', 'u_mass', 'mass_detrended', 'u_mass_detrended', 'iso_mass', 'iso_up_mass', 'iso_um_mass',
-                  'age', 'u_age', 'age_detrended', 'u_age_detrended', 'iso_age', 'iso_up_age', 'iso_um_age',
+                  'age', 'u_age', 'age_detrended', 'u_age_detrended', 'iso_age', 'iso_up_age', 'iso_um_age', 
                   'best_mean_chi_squared', 'timestamp']
 
     thewriter = csv.DictWriter(fd, fieldnames=fieldnames)
@@ -166,7 +193,7 @@ def write_results(fd, my_spectrum, sm, iso_results, sim_name, HIP_name, filename
 
     if (write_new): thewriter.writeheader()
 
-    thewriter.writerow({'name' : my_spectrum.name,
+    thewriter.writerow({'name' : id_name, #my_spectrum.name,
                         'HIP_name': HIP_name,
                         'Simbad_resolvable_name': sim_name,
                         'filenames': filenames,
@@ -247,7 +274,7 @@ def write_results(fd, my_spectrum, sm, iso_results, sim_name, HIP_name, filename
    #                     'best_mean_chi_squared' :
    #                     '{0:.2f}'.format(best_mean_chi_squared)})
 
-def write_results_fail_case(fd, sim_name, HIP_name, filenames, Teff_bounds_flag, R_bounds_flag, fail_code, fail_message, SNR, iodine_flag, binary_flag, non_stellar_flag, warnings, write_new = False):   
+def write_results_fail_case(fd, id_name, sim_name, HIP_name, filenames, Teff_bounds_flag, R_bounds_flag, fail_code, fail_message, SNR, iodine_flag, binary_flag, non_stellar_flag, warnings, write_new = False):   
     """
     Write to a csv a line denoting that SpecMatch-Emp has failed to run on a target.
     Args:
@@ -277,7 +304,7 @@ def write_results_fail_case(fd, sim_name, HIP_name, filenames, Teff_bounds_flag,
     dt = datetime.datetime.now()
     timestamp = dt.strftime("%d") + dt.strftime("%b") + dt.strftime("%Y") + '-' + dt.strftime("%X") 
     
-    thewriter.writerow({'name' : HIP_name,
+    thewriter.writerow({'name' : id_name, #HIP_name,
                         'HIP_name': HIP_name,
                         'Simbad_resolvable_name': sim_name, 
                         'filenames': filenames,
@@ -347,6 +374,27 @@ def write_results_fail_case(fd, sim_name, HIP_name, filenames, Teff_bounds_flag,
 #    (id_2MASS,) = two_MASS_name
 #    return gaia_source_id, id_2MASS
 
+#def write_lags(sim_name, HIP_name, lags, center_pix, fd, write_new = False):
+#def write_lags(sim_name, HIP_name, wl_deltas, shifted_wl_values, fd, write_new = False):
+#    #fieldnames = ['sim_name', 'HIP_name', 'lags', 'center_pix']
+#    fieldnames = ['sim_name', 'HIP_name', 'wl_deltas', 'shifted_wl_values']
+#    thewriter = csv.DictWriter(fd, fieldnames=fieldnames)
+#    
+#    # create timestamp
+#    dt = datetime.datetime.now()
+#    timestamp = dt.strftime("%d") + dt.strftime("%b") + dt.strftime("%Y") + '-' + dt.strftime("%X") #
+#
+#    if write_new: 
+#        thewriter.writeheader()
+#
+#    thewriter.writerow({'sim_name' : sim_name,
+#                        'HIP_name': HIP_name,
+#                        'wl_deltas': wl_deltas,
+#                        'shifted_wl_values': shifted_wl_values})
+#    #                    'lags': lags,
+#    #                    'center_pix': center_pix})
+
+
 # define function to get Gaia properties
 def query_gaia_data(gaia_source_id):
     # Gaia properties to flag stars outside library bounds
@@ -355,6 +403,59 @@ def query_gaia_data(gaia_source_id):
     job = Gaia.launch_job(query1)
     gaia_data = job.get_results()
     return gaia_data
+
+# define new resampling function (resample each order individually, and then combine)
+def new_resample(wave_soln_ref, wave_soln, spectrum):
+    resampled_orders = np.empty(shape=(0)) 
+    resampled_wl = np.empty(shape=(0)) # contains resampled wl for each order concatenated (so there are repeats)
+    for order in np.arange(30,52,1):
+        order_values = spectrum[order][100:-101] # truncate the ends becuase the deblazing doesn't work well here --> unless in future iteration do this in deblazing
+        apf_wl_values = wave_soln[order][100:-100]
+        first = apf_wl_values[0]
+        last = apf_wl_values[-1]
+        new_first = first - 0.017 
+        new_last = last + 0.17 
+        new_wl_section = np.array(wave_soln_ref)[(new_first <= wave_soln_ref) * (new_last >= wave_soln_ref)]
+        resampled_order = resample_order(new_wl_section, apf_wl_values, order_values)
+        resampled_orders = np.hstack([resampled_orders, resampled_order])
+        resampled_wl = np.hstack([resampled_wl, new_wl_section])
+    # average duplicate flux values
+    resampled_spectrum = np.zeros(len(wave_soln_ref))
+    i=0
+    for wl in wave_soln_ref:
+        values = resampled_orders[resampled_wl == wl]
+        avg = np.nanmean(values)
+        resampled_spectrum[i] = avg
+        i += 1       
+    return resampled_spectrum
+
+
+# define new resampling function for baseline photons -> sum not average in overlap regions
+def new_resample_baseline(wave_soln_ref, wave_soln, arr):
+    resampled_orders = np.empty(shape=(0)) 
+    resampled_wl = np.empty(shape=(0)) # contains resampled wl for each order concatenated (so there are repeats)
+    for order in np.arange(30,52,1):
+        #order_values = arr[order][100:-101] # truncate the ends becuase the deblazing doesn't work well here --> unless in future iteration do this in deblazing
+        #apf_wl_values = wave_soln[order][100:-100]
+        order_values = arr[order][:-1] 
+        apf_wl_values = wave_soln[order][:-1]
+        first = apf_wl_values[0]
+        last = apf_wl_values[-1]
+        new_first = first - 0.017 
+        new_last = last + 0.17 
+        new_wl_section = np.array(wave_soln_ref)[(new_first <= wave_soln_ref) * (new_last >= wave_soln_ref)]
+        resampled_order = resample_order(new_wl_section, apf_wl_values, order_values)
+        resampled_orders = np.hstack([resampled_orders, resampled_order])
+        resampled_wl = np.hstack([resampled_wl, new_wl_section])
+    # sum duplicate flux values
+    resampled_arr = np.zeros(len(wave_soln_ref))
+    i=0
+    for wl in wave_soln_ref:
+        values = resampled_orders[resampled_wl == wl]
+        total = np.nansum(values)
+        resampled_arr[i] = total
+        i += 1       
+    return resampled_arr
 
 # define function to run isochrone analysis
 def run_isoclassify(sm, gaia_data, phot_results):
@@ -531,7 +632,7 @@ def run_isoclassify(sm, gaia_data, phot_results):
 
 
 # define function to run SM-Emp
-def run_specmatch(sim_name, path_name, lib, display_plots): #ADZ: made this into a function 6/29/20
+def run_specmatch(sim_name, id_name, path_name, lib, display_plots): #ADZ: made this into a function 6/29/20
 
     
     #parser = OptionParser()
@@ -644,7 +745,7 @@ def run_specmatch(sim_name, path_name, lib, display_plots): #ADZ: made this into
         regions = (list(range(9)))    
     
     # Read in data from wavelength solution
-    wave_soln = (pf.open('apf_wav.fits'))[0].data
+    wave_soln = (pf.open('apf_wave_2022.fits'))[0].data
 
     # Sum all of the data files for a star
     data = np.zeros((79, 4608))
@@ -682,22 +783,43 @@ def run_specmatch(sim_name, path_name, lib, display_plots): #ADZ: made this into
     #name = header['TOBJECT']
     print('Running SpecMatch-Emp on ' + sim_name + ':')
     for filename in filenames:
-        print(filename)
-
-    ve = False
-    #Deblaze the orders: 31 to 52 (range of focus in the SME library)
+        print(filename)  
+       
+   
+    #ve = False
+    #Deblaze the orders: 31 to 52 (range of focus in the SM-Emp library)
+    peak_scale_factors = np.zeros(22)*np.nan
+    baseline_num_ph = np.zeros(np.shape(data))
+    scale_factors = np.zeros(np.shape(data))
+    data_no_deblaze = np.copy(data)
     for order_inc in range(22):
-        try: #ADZ 7/17/20:  use B-star deblaze instead of afs_deblaze
+        #try: #ADZ 7/17/20:  use B-star deblaze instead of afs_deblaze
            # data[30 + order_inc, :4607] = afs_deblaze(data[30 + order_inc],
            #                                           30 + order_inc)[0]
-            data[30 + order_inc, :4600] = bstar_deblazed2(data,30 + order_inc)
-        except ValueError: ve = True
+        
+        # prepare data in expected format for AFS algorithm 
+        #order_data_AFS = pd.DataFrame(np.vstack([wave_soln[30 + order_inc][:4600], data[30 + order_inc][:4600]]).T, columns = ["wv","intens"])  
+        #data[30 + order_inc, :4600] = AFS(order_data_AFS) 
+        #data[30 + order_inc, :4600], current_blaze = zoe_percentile_deblazed(data, 30 + order_inc)
+        data[30 + order_inc, :4600], peak_scale_factors[order_inc], scale_factors[30 + order_inc, :4600], baseline_num_ph[30 + order_inc, :4600] = bstar_deblazed2(data, 30 + order_inc)
+        #except ValueError: ve = True
 
     if (ve): print("Value Error occurred during blaze correction.")
-
+        
+        
+    #if save_peak_scale_factors:
+    #    scale_factor_file = open(scale_factor_path + '/peak_scale_factors_' + sim_name, "w")
+    #    for i in range(len(peak_scale_factors)):
+    #        element = str(peak_scale_factors[i])
+    #        if i < len(peak_scale_factors) - 1:
+    #            scale_factor_file.write(element + ", ")
+    #        elif i == len(peak_scale_factors) - 1:
+    #            scale_factor_file.write(element)
+    #    scale_factor_file.close()
+    
     #ADZ: option to remove cosmic rays (simplistically) from normalized, deblazed spectrum 
     #     NOTE: set to FALSE when running this for results other than calibration
-    remove_cosmic_rays = True
+    remove_cosmic_rays = False
     def remove_cosmic_rays(spect): # must input a normalized, deblazed spectrum
         new_spect = spect 
         for i in range(len(spect)):
@@ -714,7 +836,35 @@ def run_specmatch(sim_name, path_name, lib, display_plots): #ADZ: made this into
     wave_soln_ref = get_rescaled_wave_soln()
 
     # Resample the spectrum onto the new wavelength scale
-    data_new = resample(wave_soln_ref, wave_soln, data)
+    #data_new = resample(wave_soln_ref, wave_soln, data)
+    data_new = new_resample(wave_soln_ref, wave_soln, data)
+    
+    # Resample the array of scale factors
+    resampled_scale_factors = new_resample(wave_soln_ref, wave_soln, scale_factors)
+    
+    # resample the array of baseline absolute (num photons) fluxes
+    resampled_baseline_num_ph = new_resample_baseline(wave_soln_ref, wave_soln, baseline_num_ph)
+    
+    # resample the raw photon values without deblazing
+    resamp_no_deblaze = new_resample_baseline(wave_soln_ref, wave_soln, data_no_deblaze)
+    
+    # save array of scale factors
+    #if save_scale_factors:
+    #    all_scale_factor_path = scale_factor_path + '/scale_factors_' + sim_name + '.csv'
+    #    scale_factors_df = pd.DataFrame(resampled_scale_factors)
+    #    scale_factors_df.to_csv(all_scale_factor_path, index = False)
+        
+    # save array of abolsute baseline fluxes
+    #if save_baselines:
+    #    baselines_file = baseline_path + '/baseline_fluxes_' + sim_name + '.csv'
+    #    baselines_df = pd.DataFrame(resampled_baseline_num_ph)
+    #    baselines_df.to_csv(baselines_file, index = False)
+        
+    # save array of absolute fluxes values
+    if save_photon_counts:
+        photons_file = photon_counts_path + '/photon_counts_' + id_name + '.csv'
+        photons_df = pd.DataFrame(resamp_no_deblaze)
+        photons_df.to_csv(photons_file, index = False)
 
     # Create spectrum object
     my_spectrum = Spectrum(np.asarray(wave_soln_ref), np.asarray(data_new))
@@ -723,13 +873,35 @@ def run_specmatch(sim_name, path_name, lib, display_plots): #ADZ: made this into
     #lib = specmatchemp.library.read_hdf() ADZ 8/10/20 moved this to outer loop so can remove stars from library
     
     sm = SpecMatch(my_spectrum, lib)
+    
+    # save the unshifted spectrum to a fits file
+    if save_unshifted:
+        target = sm.target.s
+        target_wl = sm.target.w   
+        new_header = use_header
+        new_header.set('NRDU', 'YES','Normalized, resampled, deblazed, unshifted')
+        data_hdu = fits.PrimaryHDU(target, new_header) 
+        wl_hdu = fits.ImageHDU(target_wl)
+        hdu = fits.HDUList([data_hdu, wl_hdu])
+        hdu.writeto(unshifted_out_path + id_name + '_NDRU.fits')  
 
     # Perform shift
     sm.shift()
     
+    # save the shifted spectrum to a fits file
+    if save_shifted:
+        target = sm.target.s
+        target_wl = sm.target.w   
+        new_header = use_header
+        new_header.set('NRDS', 'YES','Normalized, resampled, deblazed, shifted')
+        data_hdu = fits.PrimaryHDU(target, new_header) 
+        wl_hdu = fits.ImageHDU(target_wl)
+        hdu = fits.HDUList([data_hdu, wl_hdu])
+        hdu.writeto(shifted_out_path + id_name + '_NDRS.fits')  
+    
     # produce cross-correlation plots
     #solar_reference = astropy.io.fits.open('./APF_spectra/HD10700/NDR.fits')[0].data # --- read in tau ceti spectrum --- #
-    #M_dwarf_reference = astropy.io.fits.open('./APF_spectra/GJ699/NDR.fits')[0].data # --- read in M dwarf spectrum --- #
+    #M_dwarf_reference = astropy.io.fits.open('./APF_spectra/GJ699/NDR.fits')[0].data # --- read in M-dwarf spectrum --- #
     
     #solar_x_corr =  signal.correlate(sm.target.s, solar_reference)
     #mdwarf_x_corr =  signal.correlate(sm.target.s, M_dwarf_reference)
@@ -760,7 +932,11 @@ def run_specmatch(sim_name, path_name, lib, display_plots): #ADZ: made this into
 
     # Plot HR diagram
     fig1 = figure(figsize=(12, 10))
-    sm.plot_references(verbose=True)
+    sm.plot_references(verbose=True) # NOTE: ADZ modified plot_references to omit plotting the derived properties for an example matching region
+                                     # (I think this section was copied directly from the SM-Emp quickstart page, but in that case it is actually the library properties
+                                     # plotted under 'plot target onto HR digram' which isn't possible for any general star.)
+   
+
     # plot target onto HR diagram
     axes = fig1.axes
     axes[0].plot(sm.results['Teff'], sm.results['radius'], '*', ms=15, color='red', label='Target')
@@ -768,14 +944,14 @@ def run_specmatch(sim_name, path_name, lib, display_plots): #ADZ: made this into
     axes[2].plot(sm.results['feh'], sm.results['radius'], '*', ms=15, color='red')
     axes[3].plot(sm.results['feh'], sm.results['radius'], '*', ms=15, color='red')
     axes[0].legend(numpoints=1, fontsize='small', loc='best')
-    plt.savefig(properties_plots_path + 'stellar_properties_'+ sim_name)
+    plt.savefig(properties_plots_path + 'stellar_properties_'+ id_name.replace('.','_'))
     #plt.savefig(plots_out_path +'Stellar_properties/stellar_properties_'+ name)
     fig1.show() 
     
     # Plot reference spectra and linear combinations
     fig2 = plt.figure(figsize=(12,6))
     sm.plot_lincomb()
-    plt.savefig(spectra_plots_path + 'ref_and_lincomb_spectra_' + sim_name)
+    plt.savefig(spectra_plots_path + 'ref_and_lincomb_spectra_' + id_name.replace('.','_'))
     #plt.savefig(plots_out_path + 'Ref_lincomb_spectra/ref_and_lincomb_spectra_' + name)
     fig2.show()
     
@@ -847,7 +1023,7 @@ def run_specmatch(sim_name, path_name, lib, display_plots): #ADZ: made this into
     use_header.set('NDR', 'YES','Normalized, deblazed, registered spctrm (HDU 2)')
            
     print(str(sim_name) + ' COMPLETE') #ADZ 6/29/20: include name in statement
-    return target_all_regions, residual_all_regions, wl_all_regions, use_header, obs_name, my_spectrum, sm, best_mean_chi_squared, args, SNR, iodine_flag  
+    return target_all_regions, residual_all_regions, wl_all_regions, use_header, obs_name, my_spectrum, sm, best_mean_chi_squared, args, SNR, iodine_flag, peak_scale_factors
 
 
 # ------------------------ Driver code to run SM-Emp and isoclassify -------------------- #
@@ -897,14 +1073,16 @@ if not make_new: # add to the old directories, but make them if they don't alrea
 #path_to_dir = input('Enter the path to the directory that contains the spectra: ') 
 filelist = os.listdir(path_to_dir)
 # for running on a subset of the files
-filelist = filelist[start:stop]
-# note if more than one spectra for a star, place in a subdirectory. 
 
 try:
     filelist.remove('.ipynb_checkpoints') # remove hidden file in this directory
     filelist.remove('HIP5643_spectra') # remove problematic spectrum; produces an error but not due to labeling (GJ54.1)
 except ValueError:
     pass
+
+filelist = filelist[start:stop]
+# note if more than one spectra for a star, place in a subdirectory. 
+
     
 # for restarting a run if it has stopped partway through 
 #number_run = 40 # the number already successfully completed
@@ -923,167 +1101,195 @@ except ValueError:
 
 # Run Specmatch-emp and save results, normalized, deblazed, registered target, and residuals
 nameslist = []
-pixel_shifts = []
+#pixel_shifts = []
 empty_dirs = []
 
-for filename in filelist:   
-    print(filename)
-    
-    # add a warnings field to save with results
-    warnings = []
-    
-    # add a flag for failure of isochrone analysis, binary stars, and galaxies
-    iso_fail_flag = False
-    non_stellar_flag = False
-    binary_flag = False
-      
-    # get list of filenames used for this star for logging in the results file    
-    path_name = str(path_to_dir) + '/' + filename
+apf_name_conversion = pd.read_csv('apf_name_conversion_updated.csv')
+apf_log_file = pd.read_csv('./apf_log_full_current.csv')
+# for each star
+for filename in filelist: 
     try:
-        filenames = [f for f in listdir(path_name) if isfile(join(path_name, f))]
-    except NotADirectoryError: # path to one file
-        path_split = path_name.split('/')
-        filenames = path_split[-1]
-    
-    # get star name from filename
-    apf_name_conversion = pd.read_csv('apf_name_conversion_updated.csv')
-    apf_log_file = pd.read_csv('./apf_log_full_current.csv')
-    if os.path.isdir(path_to_dir + '/' + filename): #filename.endswith('_spectra'): # is a directory of spectra
-        sim_name = filename.replace('_spectra', '') # read simbad resolvable name from directory name
-        #if name == 'etaCrv':
-        #    sim_name = 'eta Crv'
-        #elif name == 'epsCep':
-        #    sim_name = 'eps Cep'
-        #elif name == 'bTau':
-        #    sim_name = 'b Tau'
-        #else:
-        #    sim_name = name # name as resolvable by Simbad
-        row = apf_log_file[apf_log_file['Simbad_resolvable_name'] == sim_name]
-        alt_names = row['Alt_names'].tolist()[0]
-        alt_names = alt_names.strip('][').replace('\'', '').split(', ') # list of all alternative names as listed in Simbad
-        HIP_name = row['HIP_name'].values.tolist()[0]
-        non_stellar_flag = row['Known_non-stellar'].all()
-        binary_flag = row['Known_binary'].all()
-        if len(os.listdir(path_to_dir + '/' + filename)) < 1:
-            print('Skipping ' + filename + ' due to empty directory.')
-            empty_dirs += [filename]
-            continue 
-    elif filename.endswith('fits'): # is a single spectrum -- really should just never give it a single spectrum that isn't enclosed in it's own directory 
-        warnings += ['Please enclose single file in a directory with naming convention: name_spectra, where name is Simbad resolvable.']
-        try:
-            row = apf_log_file[apf_log_file['Filename'] == (filename.split('.')[0] + '.' + filename.split('.')[1] + '.fits')]
-            HIP_name = row['HIP_name'].values.tolist()[0]
-            if HIP_name == 'None': raise HIP_name_Exception('HIP_name \'None\' in APF log')
-        except (IndexError, HIP_name_Exception): # File is not is BL APF database log file or HIP name is None
-            row = apf_name_conversion[apf_name_conversion['FILENAME'] == (filename.split('.')[0] + '.' + filename.split('.')[1])]
-            HIP_name = row['HIP_NAME'].values.tolist()[0]
-        sim_name = HIP_name
-       
-    
-    if binary_flag:
-        raise Binary_Exception('This star is a known binary.')
-    if non_stellar_flag:
-        raise Non_Stellar_Exception('This is a known non-stellar object.')
-    
-    
-    # get the Gaia and 2MASS (for later isochrone analysis) names, and get certain Gaia properties
-    try:  
-        #gaia_source_id, id_2MASS = get_names(sim_name)
-        try: 
-            gaia_source_id = [name for name in alt_names if name.startswith('Gaia DR2')][0].split(' ')[-1]
-        except IndexError:
-            warnings += ['Failed to find Gaia name in Simbad; cannot run isochrone analysis.']
-            run_iso_this_iter = False  
-            iso_fail_flag = True
-        try: 
-            id_2MASS = [name for name in alt_names if name.startswith('2MASS')][0].split('J')[-1]
-        except IndexError:
-            warnings += ['Failed to find 2MASS name in Simbad; cannot run isochrone analysis.']
-            run_iso_this_iter = False  
-            iso_fail_flag = True
-        # get the gaia values
-        if os.path.exists('gaia_values.csv'): 
-            gaia_values = pd.read_csv('gaia_values.csv')
-            if gaia_values['source_id'].isin([gaia_source_id]).any(): # if this star already exists in the gaia csv file
-                gaia_data = gaia_values.loc[gaia_values['source_id'] == int(gaia_source_id)]
-            else: # query gaia for the values and add this star to the gaia csv file
-                gaia_data = query_gaia_data(gaia_source_id).to_pandas()
-                gaia_data.to_csv('gaia_values.csv', mode='a', header=False)
-        else: # create the csv file, query gaia for the values and add this star to the gaia csv file
-            gaia_data = query_gaia_data(gaia_source_id).to_pandas()
-            gaia_data.to_csv('gaia_values.csv', mode='w')
+        print(filename)
 
-        # read in Gaia properties (for later isochrone analysis)
-        if gaia_data.empty:
-            warnings += ['Gaia returned empty properties array.']
-        parallax = np.nanmedian(gaia_data['parallax']) #[mas --> milliarsec]
-        u_parallax = np.nanmedian(gaia_data['parallax_error']) #[mas]
-        if np.isnan(parallax) and not gaia_data.empty: 
-            warnings += ['Gaia returned Nan parallax'] # can return Nan value even if returns other values successfully 
-        ra = np.nanmedian(gaia_data['ra']) #[deg]
-        if np.isnan(ra) and not gaia_data.empty: 
-            warnings += ['Gaia returned Nan RA']
-        dec = np.nanmedian(gaia_data['dec'])  #[deg]
-        if np.isnan(dec) and not gaia_data.empty: 
-            warnings += ['Gaia returned Nan DEC']
-        run_iso_this_iter = run_iso
-    except (AttributeError, ValueError, NameError): # the name was not resolved in Simbad, for instance
-        warnings += ['Failed to query Gaia properties; cannot run isochrone analysis.']
-        run_iso_this_iter = False  
-        iso_fail_flag = True
-        print('Failed to query Gaia catalog.')
-     
-          
-    # get the 2MASS photometry
-    try:
-        query2 = "SELECT designation,ra,dec,k_m,h_m,j_m,k_msigcom,h_msigcom,j_msigcom FROM fp_psc WHERE designation = '" + str(id_2MASS) + "'"
-        service = pyvo.dal.TAPService('https://irsa.ipac.caltech.edu/TAP')
-        phot_results = service.run_async(query2)
-    except Exception:
-        warnings += ['Failed to acquire 2MASS photometry; cannot run isochrone analysis.']
-        run_iso_this_iter = False  
-        iso_fail_flag = True
-        print('Failed to query for 2MASS photometry.')
-        pass
-        
-    # flag stars outside library bounds in Teff and R (becuase these won't produce great matches)
-    try:
-        #gaia_Teff = float(gaia_data[gaia_data['HIP_name'] == HIP_name]['teff_val'])
-        gaia_Teff = np.nanmedian(gaia_data['teff_val'])
-        Teff_bounds_flag = int((gaia_Teff < 3056) or (gaia_Teff > 6738)) # 1 if outside library bounds in Teff
-        if np.isnan(gaia_Teff):
-            Teff_bounds_flag = 3 # 3 == could not find Teff value for star in Gaia (b/c this star is missing Teff)
-    except Exception:
-        Teff_bounds_flag = 3 # 3 == could not find Teff value for star in Gaia (b/c this star is not in the Gaia list)
-    try:
-        gaia_R = np.nanmedian(gaia_data['radius_val'])
-        R_bounds_flag = int((gaia_R < 0.168) or (gaia_R > 15.781)) # 1 if outside library bounds in radius
-        if np.isnan(gaia_R):
-            R_bounds_flag = 3 # 3 == could not find Teff value for star in Gaia (b/c this star is missing Teff)
-    except Exception:
-        R_bounds_flag = 3 # 3 == could not find radius value for star in Gaia
+        # add a warnings field to save with results
+        warnings = []
+
+        # add a flag for failure of isochrone analysis, binary stars, and galaxies
+        iso_fail_flag = False
+        non_stellar_flag = False
+        binary_flag = False
+
+        # get list of filenames used for this star for logging in the results file    
+        path_name = str(path_to_dir) + '/' + filename
+        try:
+            filenames = [f for f in listdir(path_name) if isfile(join(path_name, f))]
+        except NotADirectoryError: # path to one file
+            path_split = path_name.split('/')
+            filenames = path_split[-1]
+
+        # get star name from filename
+        if os.path.isdir(path_to_dir + '/' + filename): #filename.endswith('_spectra'): # is a directory of spectra
+            sim_name = filename.split('_')[0] #filename.replace('_spectra', '') # read simbad resolvable name from directory name
+            # define name for saving shifted spectrum, residual, plots, etc to distinguish files in the case that there are multiple
+            # subdirectories for the same star in this directory (NOTE: in that case must follow naming structure star_spectra_number
+            # for each subdirectory)
+            if filename.endswith('spectra'):
+                id_name = sim_name
+            elif filename[-1].isdigit():
+                id_name = sim_name + '_' + filename.split('_')[-1]
+            #if name == 'etaCrv':
+            #    sim_name = 'eta Crv'
+            #elif name == 'epsCep':
+            #    sim_name = 'eps Cep'
+            #elif name == 'bTau':
+            #    sim_name = 'b Tau'
+            #else:
+            #    sim_name = name # name as resolvable by Simbad
+            row = apf_log_file[apf_log_file['Simbad_resolvable_name'] == sim_name]
+            alt_names = row['Alt_names'].tolist()[0]
+            alt_names = alt_names.strip('][').replace('\'', '').split(', ') # list of all alternative names as listed in Simbad
+            HIP_name = row['HIP_name'].values.tolist()[0]
+            non_stellar_flag = row['Known_non-stellar'].all()
+            binary_flag = row['Known_binary'].all()
+            main_type = row['Main_type'].to_numpy()[0]
+            if main_type == 'SB*': # spectroscopic binary
+                binary_flag = True
+            if len(os.listdir(path_to_dir + '/' + filename)) < 1:
+                print('Skipping ' + filename + ' due to empty directory.')
+                empty_dirs += [filename]
+                continue 
+        elif filename.endswith('fits'): # is a single spectrum -- really should just never give it a single spectrum that isn't enclosed in it's own directory 
+            warnings += ['Please enclose single file in a directory with naming convention: name_spectra, where name is Simbad resolvable.']
+            try:
+                row = apf_log_file[apf_log_file['Filename'] == (filename.split('.')[0] + '.' + filename.split('.')[1] + '.fits')]
+                HIP_name = row['HIP_name'].values.tolist()[0]
+                if HIP_name == 'None': raise HIP_name_Exception('HIP_name \'None\' in APF log')
+            except (IndexError, HIP_name_Exception): # File is not in BL APF database log file or HIP name is None
+                row = apf_name_conversion[apf_name_conversion['FILENAME'] == (filename.split('.')[0] + '.' + filename.split('.')[1])]
+                HIP_name = row['HIP_NAME'].values.tolist()[0]
+            sim_name = HIP_name
+            id_name = sim_name
+
+        if binary_flag:
+            Teff_bounds_flag = 3
+            R_bounds_flag = 3
+            SNR = np.nan
+            iodine_flag = np.nan
+            raise Binary_Exception('This star is a known (spectroscopic) binary.')
+        if non_stellar_flag:
+            Teff_bounds_flag = 3
+            R_bounds_flag = 3
+            SNR = np.nan
+            iodine_flag = np.nan
+            raise Non_Stellar_Exception('This is a known non-stellar object.')
+
+
+        # get the Gaia and 2MASS (for later isochrone analysis) names, and get certain Gaia properties
+        try:  
+            run_iso_this_iter = run_iso 
+            #gaia_source_id, id_2MASS = get_names(sim_name)
+            try: 
+                gaia_source_id = [name for name in alt_names if name.startswith('Gaia DR2')][0].split(' ')[-1]
+            except IndexError:
+                warnings += ['Failed to find Gaia name in Simbad; cannot run isochrone analysis.']
+                run_iso_this_iter = False  
+                iso_fail_flag = True
+            try: 
+                id_2MASS = [name for name in alt_names if name.startswith('2MASS')][0].split('J')[-1]
+            except IndexError:
+                warnings += ['Failed to find 2MASS name in Simbad; cannot run isochrone analysis.']
+                run_iso_this_iter = False  
+                iso_fail_flag = True
+            # get the gaia values
+            if os.path.exists('gaia_values.csv'): 
+                gaia_values = pd.read_csv('gaia_values.csv')
+                if gaia_values['source_id'].isin([gaia_source_id]).any(): # if this star already exists in the gaia csv file
+                    gaia_data = gaia_values.loc[gaia_values['source_id'] == int(gaia_source_id)]
+                else: # query gaia for the values and add this star to the gaia csv file
+                    gaia_data = query_gaia_data(gaia_source_id).to_pandas()
+                    gaia_data.to_csv('gaia_values.csv', mode='a', header=False)
+            else: # create the csv file, query gaia for the values and add this star to the gaia csv file
+                gaia_data = query_gaia_data(gaia_source_id).to_pandas()
+                gaia_data.to_csv('gaia_values.csv', mode='w')
+
+            # read in Gaia properties (for later isochrone analysis)
+            if gaia_data.empty:
+                warnings += ['Gaia returned empty properties array.']
+                run_iso_this_iter = False  
+                iso_fail_flag = True
+            parallax = np.nanmedian(gaia_data['parallax']) #[mas --> milliarsec]
+            u_parallax = np.nanmedian(gaia_data['parallax_error']) #[mas]
+            if np.isnan(parallax) and not gaia_data.empty: 
+                warnings += ['Gaia returned Nan parallax'] # can return Nan value even if returns other values successfully   
+                run_iso_this_iter = False  
+                iso_fail_flag = True
+            ra = np.nanmedian(gaia_data['ra']) #[deg]
+            if np.isnan(ra) and not gaia_data.empty: 
+                warnings += ['Gaia returned Nan RA']
+                run_iso_this_iter = False  
+                iso_fail_flag = True
+            dec = np.nanmedian(gaia_data['dec'])  #[deg]
+            if np.isnan(dec) and not gaia_data.empty: 
+                warnings += ['Gaia returned Nan DEC']
+                run_iso_this_iter = False  
+                iso_fail_flag = True
+            #run_iso_this_iter = run_iso
+        except (AttributeError, ValueError, NameError): # the name was not resolved in Simbad, for instance
+            warnings += ['Failed to query Gaia properties; cannot run isochrone analysis.']
+            run_iso_this_iter = False  
+            iso_fail_flag = True
+            print('Failed to query Gaia catalog.')
+
+
+        # get the 2MASS photometry
+        try:
+            query2 = "SELECT designation,ra,dec,k_m,h_m,j_m,k_msigcom,h_msigcom,j_msigcom FROM fp_psc WHERE designation = '" + str(id_2MASS) + "'"
+            service = pyvo.dal.TAPService('https://irsa.ipac.caltech.edu/TAP')
+            phot_results = service.run_async(query2)
+        except Exception:
+            warnings += ['Failed to acquire 2MASS photometry; cannot run isochrone analysis.']
+            run_iso_this_iter = False  
+            iso_fail_flag = True
+            print('Failed to query for 2MASS photometry.')
+            pass
+
+        # flag stars outside library bounds in Teff and R (becuase these won't produce great matches)
+        try:
+            #gaia_Teff = float(gaia_data[gaia_data['HIP_name'] == HIP_name]['teff_val'])
+            gaia_Teff = np.nanmedian(gaia_data['teff_val'])
+            Teff_bounds_flag = int((gaia_Teff < 3056) or (gaia_Teff > 6738)) # 1 if outside library bounds in Teff
+            if np.isnan(gaia_Teff):
+                Teff_bounds_flag = 3 # 3 == could not find Teff value for star in Gaia (b/c this star is missing Teff)
+        except Exception:
+            Teff_bounds_flag = 3 # 3 == could not find Teff value for star in Gaia (b/c this star is not in the Gaia list)
+        try:
+            gaia_R = np.nanmedian(gaia_data['radius_val'])
+            R_bounds_flag = int((gaia_R < 0.168) or (gaia_R > 15.781)) # 1 if outside library bounds in radius
+            if np.isnan(gaia_R):
+                R_bounds_flag = 3 # 3 == could not find Teff value for star in Gaia (b/c this star is missing Teff)
+        except Exception:
+            R_bounds_flag = 3 # 3 == could not find radius value for star in Gaia
+
+        # Remove star from library (for use in calibration run)
+        lib = library.read_hdf()
+        idx_GL570B = lib.get_index('GL570B') # remove this one as it is in error according to S. Yee
+        lib.pop(idx_GL570B)
+        lib_names = lib.library_params['cps_name'].to_list()
+        #result_table = Simbad.query_objectids(HIP_name)
+        #alt_names = result_table.to_pandas()
+        #alt_names = alt_names.iloc[:,0].str.decode('utf-8') # gets rid of weird formatting
+        if HIP_name == 'HIP80824': # This is the only GJ star (that we are running) that isn't listed in library as GL
+            lib_name = 'GJ628'
+        else: # get the library name
+            lib_name = [name.replace(' ','').replace('HD','').replace('GJ','GL') for name in alt_names if name.replace(' ','').replace('HD','').replace('GJ','GL') in lib_names]
+        idx = lib.get_index(lib_name) # get the idx in the library
+        if idx == []:
+            print('Could not find star ' + HIP_name + ' in catalog in order to remove.')
+        else:
+            star = lib.pop(idx) # remove star from library
+            print('For ' + sim_name + ', removing corresponding star: ' + star[0]['cps_name'])
     
-    # Remove star from library (for use in calibration run)
-    lib = library.read_hdf()
-    idx_GL570B = lib.get_index('GL570B') # remove this one as it is in error according to S. Yee
-    lib.pop(idx_GL570B)
-    lib_names = lib.library_params['cps_name'].to_list()
-    #result_table = Simbad.query_objectids(HIP_name)
-    #alt_names = result_table.to_pandas()
-    #alt_names = alt_names.iloc[:,0].str.decode('utf-8') # gets rid of weird formatting
-    if HIP_name == 'HIP80824': # This is the only GJ star (that we are running) that isn't listed in library as GL
-        lib_name = 'GJ628'
-    else: # get the library name
-        lib_name = [name.replace(' ','').replace('HD','').replace('GJ','GL') for name in alt_names if name.replace(' ','').replace('HD','').replace('GJ','GL') in lib_names]
-    idx = lib.get_index(lib_name) # get the idx in the library
-    if idx == []:
-        print('Could not find star ' + HIP_name + ' in catalog in order to remove.')
-    else:
-        star = lib.pop(idx) # remove star from library
-        print('For ' + sim_name + ', removing corresponding star: ' + star[0]['cps_name'])
-    
-    # run Specmatch!
-    try: 
+        # run Specmatch!
         if get_only_NDR:
             # TO BE IMPLEMENTED (10/15/21). For now use the script get_all_NDR_corrected.ipynb for this purpose.
             print('\'get_only_NDR\' option not yet implemented. For now use the script get_all_NDR_corrected.ipynb for this purpose.')
@@ -1093,7 +1299,7 @@ for filename in filelist:
 
         if get_properties or get_resids or run_iso_this_iter:       
             # run SM-Emp
-            star_target, star_residual, wl_scale, use_header, obs_name, my_spectrum, sm, best_mean_chi_squared, args, SNR, iodine_flag = run_specmatch(sim_name, str(path_to_dir) + '/' + filename, lib, display_plots) # Run Specmatch on each star  
+            star_target, star_residual, wl_scale, use_header, obs_name, my_spectrum, sm, best_mean_chi_squared, args, SNR, iodine_flag, peak_scale_factors = run_specmatch(sim_name, id_name, str(path_to_dir) + '/' + filename, lib, display_plots) # Run Specmatch on each star  
             
         # save residual to fits file
         if get_resids:
@@ -1101,7 +1307,7 @@ for filename in filelist:
             resid_hdu = fits.ImageHDU(star_residual)
             wl_hdu = fits.ImageHDU(wl_scale)
             hdu = fits.HDUList([target_hdu, resid_hdu, wl_hdu])
-            hdu.writeto(residuals_out_path + sim_name + '_NDRR.fits')  
+            hdu.writeto(residuals_out_path + id_name + '_NDRR.fits')  # change 4/1/22 from sim_name
 
         # perform the isochrone analysis to determine better logg, mass, and age values
         if run_iso_this_iter:
@@ -1152,16 +1358,31 @@ for filename in filelist:
             if isfile(result_path):
                 with open(result_path,'a') as fd: 
                     #with open(properties_out_path + 'specmatch_results_detrended_test.csv','a') as fd_detrended:
-                    write_results(fd, my_spectrum, sm, iso_results, sim_name, HIP_name, filenames, Teff_bounds_flag, R_bounds_flag, SNR, iodine_flag, iso_fail_flag, warnings) 
+                    write_results(fd, my_spectrum, sm, iso_results, id_name, sim_name, HIP_name, filenames, Teff_bounds_flag, R_bounds_flag, SNR, iodine_flag, iso_fail_flag, warnings) 
             else:
                 with open(result_path, 'w', newline='') as fd:
                    # with open(properties_out_path + 'specmatch_results_detrended_test.csv', 'w', newline='') as fd_detrended:
-                   write_results(fd, my_spectrum, sm, iso_results, sim_name, HIP_name, filenames, Teff_bounds_flag, R_bounds_flag, SNR, iodine_flag, iso_fail_flag, warnings, write_new = True)
+                   write_results(fd, my_spectrum, sm, iso_results, id_name, sim_name, HIP_name, filenames, Teff_bounds_flag, R_bounds_flag, SNR, iodine_flag, iso_fail_flag, warnings, write_new = True)
 
-        # find the (approximate) pixel shift used during shifting 
+        # find the (approximate) shift used during shifting 
         # NOTE: this is currently not saved anywhere, and has not yet been shown to provide the correct shfit value! 
-        pixel_shift = np.median(sm.shift_data['lag'])
-        pixel_shifts = pixel_shifts + [pixel_shift]
+        #lags_dir, lags_file, lags_path, save_shifts
+        #pixel_shifts = sm.shift_data['lag']
+        #center_pix = sm.shift_data['center_pix']
+        #shifted_wl_values = sm.shift_data['shifted_wl_values']
+        #wl_deltas = sm.shift_data['wl_deltas']
+        #if save_shifts:
+        #    if isfile(lags_path):
+        #        with open(result_path,'a') as fd: 
+        #            #write_lags(sim_name, HIP_name, pixel_shifts, center_pix, fd)
+        #            write_lags(sim_name, HIP_name, wl_deltas, shifted_wl_values, fd)
+        #    else:
+        #        with open(lags_path, 'w', newline='') as fd:
+        #            #write_lags(sim_name, HIP_name, pixel_shifts, center_pix, fd, write_new = True)
+        #            write_lags(sim_name, HIP_name, wl_deltas, shifted_wl_values, fd, write_new = True)
+                    
+        # WRITE THIS TO A CSV FILE, ONE LINE PER STAR WITH THE SHIFTS AND TIMESTAMP, NEW CSV FOR EACH RUN
+        #pixel_shifts = pixel_shifts + [pixel_shift]
 
         # Can save the entire SpecMatch object using: 
         if save_SM_object:
@@ -1193,12 +1414,25 @@ for filename in filelist:
             if isfile(result_path):
                 with open(result_path,'a') as fd: 
                     #with open(properties_out_path + 'specmatch_results_detrended_test.csv','a') as fd_detrended:
-                    write_results_fail_case(fd, sim_name, HIP_name, filenames, Teff_bounds_flag, R_bounds_flag, fail_code, fail_message, SNR, iodine_flag, binary_flag, non_stellar_flag, warnings)
+                    write_results_fail_case(fd, id_name, sim_name, HIP_name, filenames, Teff_bounds_flag, R_bounds_flag, fail_code, fail_message, SNR, iodine_flag, binary_flag, non_stellar_flag, warnings)
             else:
                 with open(result_path, 'w', newline='') as fd:
                    # with open(properties_out_path + 'specmatch_results_detrended_test.csv', 'w', newline='') as fd_detrended:
-                   write_results_fail_case(fd, sim_name, HIP_name, filenames, Teff_bounds_flag, R_bounds_flag, fail_code, fail_message, SNR, iodine_flag, binary_flag, non_stellar_flag, warnings, write_new = True)
+                   write_results_fail_case(fd, id_name, sim_name, HIP_name, filenames, Teff_bounds_flag, R_bounds_flag, fail_code, fail_message, SNR, iodine_flag, binary_flag, non_stellar_flag, warnings, write_new = True)
 
+        # save Nans for the shift values    
+        #wl_deltas = [np.nan]
+        #shifted_wl_values = [np.nan]
+        #if save_shifts:
+        #    if isfile(lags_path):
+        #        with open(result_path,'a') as fd: 
+        #            write_lags(sim_name, HIP_name, wl_deltas, shifted_wl_values, fd)
+        #    else:
+        #        with open(lags_path, 'w', newline='') as fd:
+        #            write_lags(sim_name, HIP_name, wl_deltas, shifted_wl_values, fd, write_new = True)                   
+                    
+                    
+                    
 sys.stdout = old_stdout
 
 
