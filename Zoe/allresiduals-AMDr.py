@@ -21,7 +21,7 @@ from random import choice
 from random import uniform
 import mplcursors
 import pandas as pd
-from operator import itemgetter
+# from operator import itemgetterx
 
 from astropy import stats
 import astropy
@@ -37,15 +37,15 @@ include_identifier = True
 # SNR_limit = 150
 
 
-n = 15 # 25
-gaussian_threshold = 0.5
+n = 6
+gaussian_threshold = 2.1
 width_threshold = 2.7
 SNR_limit = -1
 
 # results_folder = '/mnt_home/zoek/code/APF-BL-DAP/Zoe/AnnaInjectionResults/'
 # directory = '/mnt_home/azuckerman/BL_APF_DAP/APF_spectra/NDRR_inj_narrow'
 
-results_folder = '/mnt_home/zoek/code/APF-BL-DAP/Zoe/indResults/'
+results_folder = '/mnt_home/zoek/code/APF-BL-DAP/Zoe/' + str(n) + 'sResultsFORPAPER/'
 directory = '/mnt_home/azuckerman/BL_APF_DAP/APF_spectra/NDRR_ind'
 
 if include_identifier == True:
@@ -55,7 +55,7 @@ else:
 
 plt.rcParams["figure.figsize"] = (8,5)
 plt.rcParams.update({'font.size': 15})
-plt.rcParams. update({'font.family':'serif'}) 
+# plt.rcParams. update({'font.family':'serif'}) 
 
 resid_AMD_table = pd.read_pickle('/home/zoek/code/APF-BL-DAP/Zoe/resid_AMD.pkl')
 
@@ -120,19 +120,41 @@ num_recoveries = 0
 column_names = ['star', 'index', 'ndetections']
 total_detections = pd.DataFrame(columns = column_names)
 
-residuals_target_list= pd.read_csv('/mnt_home/zoek/code/APF-BL-DAP/Zoe/residual_target_list.csv')['Simbad_resolvable_name']
 
 
 # every file in Anna's NDRR folder that is also in the residual target list
-list_of_files = []
-for filename in os.listdir(directory):
-    if filename.endswith(".fits"): 
-        file_path = os.path.join(directory, filename)
-        file = fits.open(file_path)
-        header = file[0].header
-        star = header['OBJECT']
-        if residuals_target_list.str.contains(star).any():
-            list_of_files = np.append(list_of_files, file_path)
+
+if include_identifier == True:
+    residuals_target_list = pd.read_csv('/mnt_home/zoek/code/APF-BL-DAP/Zoe/Residual_list_all_ind_5-14-22.csv')['Filename']
+    list_of_files = []
+    for filename in os.listdir(directory):
+        if filename.endswith(".fits"): 
+            file_path = os.path.join(directory, filename)
+            identifier = file_path.split('/')[-1]
+            length = len(identifier)
+            identifier = identifier[:length-10]  
+            if residuals_target_list.str.contains(identifier).any():
+                list_of_files = np.append(list_of_files, file_path)
+                
+else: 
+    residuals_target_list = pd.read_csv('/mnt_home/zoek/code/APF-BL-DAP/Zoe/residual_target_list.csv')['Simbad_resolvable_name']
+    list_of_files = []
+    for filename in os.listdir(directory):
+        if filename.endswith(".fits"): 
+            file_path = os.path.join(directory, filename)
+            file = fits.open(file_path)
+            header = file[0].header
+            star = header['OBJECT']
+            if star == 'HD187642':
+                star = 'HIP97649'
+            if star == 'TIC286132427':
+                star = 'HIP47990'
+            file.close()
+            if residuals_target_list.str.contains(star).any():
+                list_of_files = np.append(list_of_files, file_path)
+        
+        
+        
         
         
 # create Laser Detection Results folder
@@ -153,7 +175,7 @@ if save_figs == True:
 
 for which_star in np.arange(len(list_of_files)):
 
-    print(which_star)
+#     print(which_star)
     
     # Get one star from list of all stars
     APF_flux_path = list_of_files[which_star]
@@ -283,7 +305,9 @@ for which_star in np.arange(len(list_of_files)):
         # oversample detected signal to determine precise bounds on the edges of the signal
         # use this to determine the FWHM of the signal in pixels
         oversampled_x = np.linspace(x[0], x[-1], len(x) * 10)
-        spl = splrep(x, y, k=2)
+        if len(x) < 3:
+            continue
+        spl = splrep(x, y, k=1)
         oversampled_y = splev(oversampled_x, spl)
 
         max_y = max(oversampled_y)
@@ -346,13 +370,32 @@ for which_star in np.arange(len(list_of_files)):
         
             if plot == True or save_figs == True:
 
-                fig = plt.figure()
-                plt.step(x, y, label = 'Detected Signal at ' + str(round(wl[idx], 2)) + ' A')
-#                 plt.plot(oversampled_x, gaus, label = 'Gaussian')
-                plt.plot(x, gaus2, label = 'Gaussian')
+                # fig = plt.figure(dpi=300)
+                # start_wl = wl[idx]
+                # # plt.step(x - start_wl, y, label = 'Candidate Event at ' + str(round(wl[idx], 2)) + ' A')
+                # plt.step(x - start_wl, gaus2, label = 'Injected Signal')
+                # plt.plot(x - start_wl, gaus2, label = 'Gaussian')
+                # print(identifier)
+                # print(round(wl[idx], 2))
+                # print(min_chi_squared)
+                # print('')
+                
+                
+                # comment out above, uncomment below
+                fig = plt.figure(dpi=300)
+                start_wl = wl[idx]
+                plt.step(x - start_wl, y, label = 'Candidate Event at \n' + str(round(wl[idx], 2)) + ' A')
+                plt.step(x - start_wl, gaus2, label = 'Gaussian Fit')
+    
+    
+    
+    
+    
+    
                 if width_threshold == True:
+                    True
                     # passed width threshold AND gaussian threshold
-                    plt.title('PASS: chi-squared of ' + str(round(min_chi_squared, 4)) + ' and pixel width of ' + str(pixel_width))
+#                     plt.title('Chi-squared: ' + str(round(min_chi_squared, 4)) + ', Width: ' + str(pixel_width))
                 elif gauss_threshold == True and width_threshold == False:
                     # failed width threshold
                     plt.title('FAIL: too narrow with pixel width of ' + str(pixel_width))
@@ -364,10 +407,10 @@ for which_star in np.arange(len(list_of_files)):
 
 
 
-                plt.xlabel('Wavelength [A]')
+                plt.xlabel('Wavelength - ' + str(np.round(start_wl, 2)) + ' A [A]')
                 plt.ylabel('Flux')
                 for ind in np.arange(left_bound, right_bound):
-                    plt.axvline(x=wl[ind], color='gray', linestyle='-', linewidth=0.2)
+                    plt.axvline(x=wl[ind] - start_wl, color='gray', linestyle='-', linewidth=0.2)
                 plt.legend()
                 if plot == True:
                     plt.show()
@@ -383,18 +426,20 @@ for which_star in np.arange(len(list_of_files)):
 
                     name = 'r_' + star + '_' + str(round(wl[idx], 2))
                     fig.savefig(path + '/' + name + '.png')
+                    plt.close(fig)
+                    
 
                 if detection_plot == False:
                     detection_plot = True
 
-                    fig = plt.figure()
-                    plt.plot(wl, spect, label = 'Original Data')
+                    fig = plt.figure(dpi=300)
+                    plt.plot(wl, spect)
                     if (len(idxs2) > 0):
                         for ind in idxs2:
                             plt.axvline(x=wl[ind], color='gray', linestyle='--')
                     plt.axhline(y=T, linestyle='--', label='Threshold')
-                    plt.title('SNR: ' + str(round(SNR, 0)))
-                    plt.suptitle(star)
+                    # plt.title('SNR: ' + str(round(SNR, 0)))
+                    # plt.suptitle(star)
                     plt.xlabel('Wavelength [A]')
                     plt.ylabel('Flux')
                     plt.legend() 
@@ -403,13 +448,25 @@ for which_star in np.arange(len(list_of_files)):
                         plt.show()
                     if save_figs == True:
                         fig.savefig(path + '/' + 'r_data' + star + '.png')
+                        plt.close(fig)
+        
     wavelengths = []
+    AMD_heights = []
     for i in idxs4:
         w = wl[i]
+        f = spect[i]
+        
+        AMD_height = (f - med) / abs_dev
+        AMD_heights += [AMD_height]
+
         wavelengths += [w]
+        
+    new1 = {'description': ['indicies above threshold', 'indicies that are gaussian-shaped', 'indicies wider than PSF'],
+            'indicies': [idxs2.tolist(), idxs3, idxs4], 'wavelengths': [[], [], wavelengths], 'heights': [[], [], idxs4_heights], 'AMD heights': [[], [], AMD_heights]}
 
     new1 = {'description': ['indicies above threshold', 'indicies that are gaussian-shaped', 'indicies wider than PSF'],
-            'indicies': [idxs2.tolist(), idxs3, idxs4], 'wavelengths': [[], [], wavelengths], 'heights': [[], [], idxs4_heights]}
+            'indicies': [idxs2.tolist(), idxs3, idxs4], 'wavelengths': [[], [], wavelengths], 'heights': [[], [], idxs4_heights], 'AMD heights': [[], [], AMD_heights]}
+    
     
     df1 = pd.DataFrame(new1)
     detections = detections.append(df1)
@@ -429,8 +486,11 @@ for which_star in np.arange(len(list_of_files)):
         
     df2 = pd.DataFrame(new2)
     total_detections = total_detections.append(df2)
+    plt.close('all')
     
 if save_figs == True:
     total_detections.to_csv(results_folder + 'r_results.csv')
 else:
     print(total_detections)
+    
+plt.close('all')
