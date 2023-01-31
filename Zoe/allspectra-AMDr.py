@@ -26,6 +26,19 @@ from operator import itemgetter
 from astropy import stats
 import astropy
 
+
+# 10/28/22 edit: find PIXEL WIDTHs
+passing_pixel_widths = []
+all_pixel_widths = []
+
+
+# 10/27/22 edit: find the widths of the events that pass the gaussian profiling test DIDN'T WORK
+widths_all_events = []
+withds_passed_guass_shape = []
+widths_passed_gauss_width = []
+
+
+
 # find the fits file corresponding to that observation by using Anna's key
 # set include_identifier = True if running on all individual spectra
 include_identifier = True
@@ -42,7 +55,7 @@ width_threshold = 2.7
 SNR_limit = -1
 
 
-results_folder = '/mnt_home/zoek/code/APF-BL-DAP/Zoe/' + str(n) + 'sResultsFORPAPER/'
+results_folder = '/mnt_home/zoek/code/APF-BL-DAP/Zoe/6sResultsFINAL/'
 directory = '/mnt_home/azuckerman/BL_APF_DAP/APF_spectra/NDRS_ind'
 
 if include_identifier == True:
@@ -250,6 +263,7 @@ for which_star in np.arange(0, len(list_of_files)):
     idxs4 = [] # indicies in idxs3 that are greater than 5 pixels in width
 
     idxs4_heights = []
+    pixel_widths = []
 
     
 #     clipped = astropy.stats.sigma_clip(spect, sigma=5).filled()
@@ -353,13 +367,16 @@ for which_star in np.arange(0, len(list_of_files)):
         gaus = gaussian(oversampled_x, height, pos, width, min_y)
         gaus2 = gaussian(x, height, pos, width, min_y)
 
-        width_threshold = False
-        gauss_threshold = False
+        width_threshold_plot = False
+        gauss_threshold_plot = False
+        
+        widths_all_events += [width]
 
         # see if the signal fits a gaussian
         if min_chi_squared < gaussian_threshold:
-            gauss_threshold = True
+            gauss_threshold_plot = True
             idxs3 = idxs3 + [idx]
+            withds_passed_guass_shape += [width]
 
             # find the width of the gaussian in pixels
 
@@ -377,12 +394,16 @@ for which_star in np.arange(0, len(list_of_files)):
                 temp_right_bound += 1
 
             pixel_width = (temp_right_bound - temp_left_bound) / 10
+            all_pixel_widths += [pixel_width]
 
             if pixel_width > width_threshold:
-                width_threshold = True
+                width_threshold_plot = True
                 idxs4 = idxs4 + [idx]
                 num_detections_this_star += 1
                 idxs4_heights = idxs4_heights + [height]
+                widths_passed_gauss_width += [width]
+                passing_pixel_widths += [pixel_width]
+                pixel_widths += [pixel_width]
         
         
             if plot == True or save_figs == True:
@@ -391,10 +412,10 @@ for which_star in np.arange(0, len(list_of_files)):
                 plt.step(x, y, label = 'Detected Signal at ' + str(round(wl[idx], 2)) + ' A')
 #                 plt.plot(oversampled_x, gaus, label = 'Gaussian')
                 plt.plot(x, gaus2, label = 'Gaussian')
-                if width_threshold == True:
+                if width_threshold_plot == True:
                     # passed width threshold AND gaussian threshold
                     plt.title('Passing Event with a chi-squared of ' + str(round(min_chi_squared, 4)) + ' and pixel width of ' + str(pixel_width))
-                elif gauss_threshold == True and width_threshold == False:
+                elif gauss_threshold_plot == True and width_threshold_plot == False:
                     # failed width threshold
                     plt.title('FAIL: too narrow with pixel width of ' + str(pixel_width))
                     break
@@ -465,7 +486,7 @@ for which_star in np.arange(0, len(list_of_files)):
         wavelengths += [w]
         
     new1 = {'description': ['indicies above threshold', 'indicies that are gaussian-shaped', 'indicies wider than PSF'],
-            'indicies': [idxs2.tolist(), idxs3, idxs4], 'wavelengths': [[], [], wavelengths], 'heights': [[], [], idxs4_heights], 'AMD heights': [[], [], AMD_heights]}
+            'indicies': [idxs2.tolist(), idxs3, idxs4], 'wavelengths': [[], [], wavelengths], 'heights': [[], [], idxs4_heights], 'AMD heights': [[], [], AMD_heights], 'widths': [[], [], pixel_widths]}
     
     df1 = pd.DataFrame(new1)
     detections = detections.append(df1)
@@ -493,3 +514,14 @@ else:
     print(total_detections)
     
 plt.close('all')
+
+print('num injections above threshold for spectra:')
+print(num_injections_above_threshold)
+
+
+np.save('s_widths_all_events', np.array(widths_all_events))
+np.save('s_withds_passed_guass_shape', np.array(withds_passed_guass_shape))
+np.save('s_widths_passed_gauss_width', np.array(widths_passed_gauss_width))
+
+np.save('s_PIXEL_widths_all_events', np.array(all_pixel_widths))
+np.save('s_PIXEL_widths_passed_gauss', np.array(passing_pixel_widths))
